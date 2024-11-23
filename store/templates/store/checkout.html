@@ -6,7 +6,7 @@
     <div class="row">
         <div class="col-lg-6">
             <div class="box-element" id="form-wrapper">
-                <form id="payment-form">
+                <form id="shipping-form">
                     <div id="shipping-info">
                         <hr>
                         <h3>Shipping Information:</h3>
@@ -26,17 +26,14 @@
                     </div>
 
                     <hr>
-                    <h3>Payment:</h3>
-                    <hr>
-                    <div id="card-element">
-                        <!-- A Stripe Element will be inserted here. -->
-                    </div>
-                    <div id="card-errors" role="alert"></div>
-
-                    <button id="submit-button" class="btn btn-success btn-block">
-                        <span id="button-text">Pay now</span>
-                    </button>
+                    <input id="form-button" class="btn btn-success btn-block" type="submit" value="Continue">
                 </form>
+            </div>
+
+            <br>
+            <div class="box-element hidden" id="payment-info">
+                <small>Paypal Options</small>
+                <div id="paypal-button-container"></div>
             </div>
         </div>
 
@@ -61,81 +58,95 @@
     </div>
 </div>
 
-<script src="https://js.stripe.com/v3/"></script>
+<!-- Add PayPal Script -->
+<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=USD"></script>
+
 <script>
-    var stripe = Stripe('{{ stripe_public_key }}');
-    var elements = stripe.elements();
-    var style = {
-        base: {
-            color: "#32325d",
-            fontFamily: 'Arial, sans-serif',
-            fontSmoothing: "antialiased",
-            fontSize: "16px",
-            "::placeholder": {
-                color: "#32325d"
+    var total = '{{order.get_cart_total}}'
+    
+    // Shipping form handling
+    var form = document.getElementById('shipping-form')
+    form.addEventListener('submit', function(e){
+        e.preventDefault()
+        if (form.checkValidity()) {
+            document.getElementById('form-button').classList.add('hidden')
+            document.getElementById('payment-info').classList.remove('hidden')
+        } else {
+            form.reportValidity()
+        }
+    })
+
+    // PayPal button render
+    paypal.Buttons({
+        style: {
+            color: 'blue',
+            shape: 'rect',
+        },
+        createOrder: function(data, actions) {
+            // Validate form data before creating order
+            if (!form.checkValidity()) {
+                form.reportValidity();
+                return false;
+            }
+            
+            return actions.order.create({
+                purchase_units: [{
+                    amount: {
+                        value: parseFloat(total).toFixed(2)
+                    }
+                }]
+            });
+        },
+        onApprove: async function(data, actions) {
+            try {
+                const details = await actions.order.capture();
+                console.log('Transaction completed by', details.payer.name.given_name);
+                
+                const formData = {
+                    'name': form.name.value,
+                    'email': form.email.value,
+                    'address': form.address.value,
+                    'city': form.city.value,
+                    'state': form.state.value,
+                    'zipcode': form.zipcode.value,
+                    'total': total,
+                    'transaction_id': details.id
+                };
+
+                const response = await fetch('/process_order/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                    },
+                    body: JSON.stringify({
+                        'form': formData,
+                        'paypal_data': details
+                    })
+                });
+
+                const responseData = await response.json();
+                
+                if (response.ok && responseData.success) {
+                    window.location.href = responseData.redirect_url;
+                } else {
+                    throw new Error(responseData.error || 'Failed to process order');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('There was an error processing your payment. Please try again.');
             }
         },
-        invalid: {
-            fontFamily: 'Arial, sans-serif',
-            color: "#fa755a",
-            iconColor: "#fa755a"
+        onError: function(err) {
+            console.error('PayPal Error:', err);
+            alert('There was an error with PayPal. Please try again.');
+        },
+        onCancel: function(data) {
+            console.log('Payment cancelled');
         }
-    };
-
-    var card = elements.create("card", { style: style });
-    card.mount("#card-element");
-
-    card.on('change', function(event) {
-        var displayError = document.getElementById('card-errors');
-        if (event.error) {
-            displayError.textContent = event.error.message;
-        } else {
-            displayError.textContent = '';
-        }
-    });
-
-    var form = document.getElementById('payment-form');
-    form.addEventListener('submit', function(ev) {
-        ev.preventDefault();
-        
-        // Disable the submit button to prevent repeated clicks
-        document.getElementById('submit-button').disabled = true;
-
-        fetch('/create-payment-intent/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            body: JSON.stringify({
-                order_id: '{{ order.id }}'
-            })
-        })
-        .then(function(response) {
-            return response.json();
-        })
-        .then(function(data) {
-            return stripe.confirmCardPayment(data.clientSecret, {
-                payment_method: {
-                    card: card,
-                    billing_details: {
-                        name: '{{ request.user.username }}'
-                    }
-                }
-            });
-        })
-        .then(function(result) {
-            if (result.error) {
-                var errorElement = document.getElementById('card-errors');
-                errorElement.textContent = result.error.message;
-                document.getElementById('submit-button').disabled = false;
-            } else {
-                // Payment successful
-                submitFormData();
-            }
-        });
-    });
+    }).render('#paypal-button-container');
 </script>
+
 {% endblock content %}
 
 

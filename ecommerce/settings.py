@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 """
 
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -23,7 +27,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = 'z+ksf@)0d^qojbh4rnp4b1to$hq&*tt(3bs$gf(3i267g$k9ln'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = []
 
@@ -129,6 +133,10 @@ MEDIA_URL = '/images/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'static/images')
 
-# Stripe Settings
-STRIPE_PUBLIC_KEY = 'pk_test_51Nd8aQSFUCQ0kY1rg4AJNMkmuDZh4IalbK7uufeaaDDRP1gFfIW2AQGosT8xX1jQO6H6nXgdL6XK5726hAUIUvLb00FUWEmdtC'
-STRIPE_SECRET_KEY = 'sk_test_51Nd8aQSFUCQ0kY1rq2oLjdRgw0kSrj6gchRekAbLGrbzTyHsxQ12KCze9RPVK3BmQEzfscJKHSQCnR4DOS0J3tpX00P5tG03L5'
+# PayPal Settings
+PAYPAL_CLIENT_ID = os.getenv('PAYPAL_CLIENT_ID')
+PAYPAL_SECRET_KEY = os.getenv('PAYPAL_SECRET_KEY')
+
+# Add this to ensure environment variables are set
+if not PAYPAL_CLIENT_ID or not PAYPAL_SECRET_KEY:
+    raise Exception("PayPal credentials not set in environment variables")

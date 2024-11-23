@@ -1,0 +1,43 @@
+{% extends 'store/main.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="fas fa-check-circle text-success" style="font-size: 64px;"></i>
+                    <h2 class="mt-3">Order Successful!</h2>
+                    <p class="lead">Thank you for your purchase.</p>
+                    
+                    <div class="order-details mt-4">
+                        <h4>Order Summary</h4>
+                        <p>Order #: {{ order.transaction_id }}</p>
+                        <p>Total Amount: ${{ order.get_cart_total|floatformat:2 }}</p>
+                        
+                        <div class="shipping-details mt-3">
+                            <h5>Shipping Details</h5>
+                            <p>{{ order.shippingaddress.address }}</p>
+                            <p>{{ order.shippingaddress.city }}, {{ order.shippingaddress.state }} {{ order.shippingaddress.zipcode }}</p>
+                        </div>
+                        
+                        <div class="order-items mt-4">
+                            <h5>Items Purchased</h5>
+                            {% for item in order.orderitem_set.all %}
+                            <div class="item-row">
+                                <p>{{ item.product.name }} x {{ item.quantity }} - ${{ item.get_total|floatformat:2 }}</p>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'store' %}" class="btn btn-primary">Continue Shopping</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %} 
