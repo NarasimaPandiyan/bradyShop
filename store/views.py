@@ -7,11 +7,20 @@ from .models import *
 from .utils import cookieCart, cartData, guestOrder
 from django.contrib.auth import login, authenticate
 from .forms import CustomUserCreationForm, CustomerForm
-from django.views.decorators.csrf import csrf_exempt
+import stripe
 from django.conf import settings
+from django.urls import reverse
+import logging
+from django.contrib.auth import logout
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.urls import reverse
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Add these settings at the top of the file
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 def store(request):
 	data = cartData(request)
@@ -108,27 +117,27 @@ def cart(request):
 	context = {'items':items, 'order':order, 'cartItems':cartItems}
 	return render(request, 'store/cart.html', context)
 
-@login_required(login_url='login_register_choice')
 def checkout(request):
-	data = cartData(request)
-	
-	cartItems = data['cartItems']
-	order = data['order']
-	items = data['items']
+    data = cartData(request)
+    cartItems = data['cartItems']
+    order = data['order']
+    items = data['items']
 
-	# Check if any items are out of stock
-	for item in items:
-		if item.product.stock < item.quantity:
-			messages.error(request, f'Sorry, {item.product.name} only has {item.product.stock} units available.')
-			return redirect('cart')
+    # Check if cart total is 0
+    if order.get_cart_total == 0:
+        return redirect('cart')  # Redirect to cart if total is 0
 
-	context = {
-		'items': items,
-		'order': order,
-		'cartItems': cartItems,
-		'paypal_client_id': settings.PAYPAL_CLIENT_ID,
-	}
-	return render(request, 'store/checkout.html', context)
+    # If user is not authenticated, redirect to login/register choice page
+    if not request.user.is_authenticated:
+        return redirect('login_register_choice')
+
+    context = {
+        'items': items,
+        'order': order,
+        'cartItems': cartItems,
+        'stripe_public_key': settings.STRIPE_PUBLIC_KEY,
+    }
+    return render(request, 'store/checkout.html', context)
 
 def updateItem(request):
 	data = json.loads(request.body)
@@ -156,50 +165,33 @@ def updateItem(request):
 	return JsonResponse('Item was added', safe=False)
 
 def processOrder(request):
-	if request.method == 'POST':
-		try:
-			data = json.loads(request.body)
-			form_data = data['form']
-			
-			customer = request.user.customer
-			order = Order.objects.get(customer=customer, complete=False)
-			total = float(form_data['total'])
-			order.transaction_id = form_data['transaction_id']
-			
-			# Verify order total matches cart total
-			if total == float(order.get_cart_total):
-				# Update stock levels
-				order_items = order.orderitem_set.all()
-				for item in order_items:
-					product = item.product
-					product.stock -= item.quantity
-					product.save()
-				
-				# Complete the order
-				order.complete = True
-				order.transaction_id = form_data['transaction_id']
-				order.save()
-				
-				# Create shipping address
-				ShippingAddress.objects.create(
-					customer=customer,
-					order=order,
-					address=form_data['address'],
-					city=form_data['city'],
-					state=form_data['state'],
-					zipcode=form_data['zipcode'],
-				)
-				
-				return JsonResponse({
-					'success': True,
-					'redirect_url': reverse('order_success', kwargs={'order_id': order.id})
-				})
-			
-			return JsonResponse({'error': 'Total price mismatch'}, status=400)
-			
-		except Exception as e:
-			return JsonResponse({'error': str(e)}, status=400)
-	return JsonResponse('Invalid request', status=400)
+	transaction_id = datetime.datetime.now().timestamp()
+	data = json.loads(request.body)
+
+	if request.user.is_authenticated:
+		customer = request.user.customer
+		order, created = Order.objects.get_or_create(customer=customer, complete=False)
+	else:
+		customer, order = guestOrder(request, data)
+
+	total = float(data['form']['total'])
+	order.transaction_id = transaction_id
+
+	if total == order.get_cart_total:
+		order.complete = True
+	order.save()
+
+	if order.shipping == True:
+		ShippingAddress.objects.create(
+		customer=customer,
+		order=order,
+		address=data['shipping']['address'],
+		city=data['shipping']['city'],
+		state=data['shipping']['state'],
+		zipcode=data['shipping']['zipcode'],
+		)
+
+	return JsonResponse('Payment submitted..', safe=False)
 
 def product_detail(request, product_id):
 	data = cartData(request)
@@ -246,35 +238,108 @@ def login_view(request):
 			return redirect('checkout')
 	return render(request, 'store/login.html')
 
-@csrf_exempt
-def process_order(request):
-	transaction_id = datetime.datetime.now().timestamp()
-	data = json.loads(request.body)
-
-	if request.user.is_authenticated:
-		customer = request.user.customer
-		order, created = Order.objects.get_or_create(customer=customer, complete=False)
-	else:
-		customer, order = guestOrder(request, data)
-
-	total = float(data['total'])
-	order.transaction_id = transaction_id
-
-	if total == float(order.get_cart_total):
-		order.complete = True
-	order.save()
-
-	if order.shipping:
-		ShippingAddress.objects.create(
-			customer=customer,
-			order=order,
-			address=data['shipping']['address'],
-			city=data['shipping']['city'],
-			state=data['shipping']['state'],
-			zipcode=data['shipping']['zipcode'],
+def create_payment_intent(request):
+	try:
+		data = json.loads(request.body)
+		
+		# Create PaymentIntent with correct configuration
+		intent = stripe.PaymentIntent.create(
+			amount=int(float(data['amount']) * 100),  # Convert to cents
+			currency='usd',
+			payment_method=data['payment_method_id'],
+			automatic_payment_methods={
+				'enabled': True,
+				'allow_redirects': 'never'
+			},
+			confirm=True,
+			return_url=request.build_absolute_uri(reverse('payment_success'))
 		)
+		
+		if intent.status == 'requires_action':
+			return JsonResponse({
+				'success': True,
+				'requires_action': True,
+				'client_secret': intent.client_secret
+			})
+		
+		return JsonResponse({
+			'success': True,
+			'requires_action': False,
+			'client_secret': intent.client_secret
+		})
+		
+	except stripe.error.CardError as e:
+		return JsonResponse({
+			'success': False,
+			'error': e.error.message
+		})
+	except Exception as e:
+		return JsonResponse({
+			'success': False,
+			'error': str(e)
+		})
 
-	return JsonResponse('Payment complete!', safe=False)
+def process_order(request):
+    try:
+        data = json.loads(request.body)
+        logger.debug(f"Received data: {data}")
+
+        # Get the order
+        if request.user.is_authenticated:
+            customer = request.user.customer
+            order, created = Order.objects.get_or_create(customer=customer, complete=False)
+        else:
+            cookieData = cartData(request)
+            order = cookieData['order']
+            customer = None
+
+        # Decrease stock for each item
+        order_items = order.orderitem_set.all()
+        for item in order_items:
+            product = item.product
+            if product.stock >= item.quantity:
+                product.stock -= item.quantity
+                product.save()
+            else:
+                return JsonResponse({
+                    'status': 'error',
+                    'message': f'Insufficient stock for {product.name}'
+                })
+
+        # Process the order
+        order.complete = True
+        order.transaction_id = datetime.datetime.now().timestamp()
+        order.save()
+
+        # Create shipping address - Make sure this runs
+        if data.get('shipping'):  # Changed from 'in data' to get()
+            shipping_data = data['shipping']
+            shipping = ShippingAddress.objects.create(
+                customer=customer,
+                order=order,
+                address=shipping_data.get('address', ''),
+                city=shipping_data.get('city', ''),
+                state=shipping_data.get('state', ''),
+                zipcode=shipping_data.get('zipcode', '')
+            )
+            logger.debug(f"Created shipping address: {shipping}")
+
+        # Save order ID in session for guest users
+        if not request.user.is_authenticated:
+            request.session['last_order_id'] = order.id
+
+        return JsonResponse({
+            'status': 'success',
+            'message': 'Order processed successfully',
+            'order_id': order.id
+        })
+
+    except Exception as e:
+        logger.error(f"Order processing error: {str(e)}")
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Order processing failed: {str(e)}'
+        })
 
 def login_register_choice(request):
 	"""View to let users choose between login, register, or guest checkout"""
@@ -284,14 +349,43 @@ def login_register_choice(request):
 		
 	return render(request, 'store/login_register_choice.html')
 
-@login_required
-def orderSuccess(request, order_id):
-    try:
-        order = Order.objects.get(id=order_id, customer=request.user.customer, complete=True)
-    except Order.DoesNotExist:
-        return redirect('store')
-        
+def payment_success(request):
+    # Get the most recent completed order for the user
+    if request.user.is_authenticated:
+        order = Order.objects.filter(
+            customer=request.user.customer, 
+            complete=True
+        ).order_by('-date_ordered').first()
+    else:
+        # For guest users, get order from session
+        order_id = request.session.get('last_order_id')
+        order = Order.objects.filter(id=order_id).first() if order_id else None
+
     context = {
-        'order': order
+        'order': order,
+        'items': order.orderitem_set.all() if order else None,
+        'total': order.get_cart_total if order else 0,
     }
-    return render(request, 'store/order_success.html', context)
+    return render(request, 'store/payment_success.html', context)
+
+def payment_failed(request):
+	error_message = request.GET.get('error', 'An error occurred during payment processing.')
+	return render(request, 'store/payment_failed.html', {'error_message': error_message})
+
+@login_required
+def profile(request):
+    customer = request.user.customer
+    orders = Order.objects.filter(customer=customer, complete=True).order_by('-date_ordered')
+    
+    context = {
+        'customer': customer,
+        'orders': orders,
+    }
+    return render(request, 'store/profile.html', context)
+
+
+def logout_view(request):
+    if request.user.is_authenticated:
+        logout(request)
+        messages.success(request, 'You have been successfully logged out.')
+    return redirect('store')

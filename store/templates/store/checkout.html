@@ -6,147 +6,220 @@
     <div class="row">
         <div class="col-lg-6">
             <div class="box-element" id="form-wrapper">
-                <form id="shipping-form">
-                    <div id="shipping-info">
-                        <hr>
-                        <h3>Shipping Information:</h3>
-                        <hr>
-                        <div class="form-field">
-                            <input class="form-control" type="text" name="address" placeholder="Address..">
-                        </div>
-                        <div class="form-field">
-                            <input class="form-control" type="text" name="city" placeholder="City..">
-                        </div>
-                        <div class="form-field">
-                            <input class="form-control" type="text" name="state" placeholder="State..">
-                        </div>
-                        <div class="form-field">
-                            <input class="form-control" type="text" name="zipcode" placeholder="Zip code..">
+                <div class="payment-container">
+                    <div class="payment-header">
+                        <h2>Secure Payment</h2>
+                        <div class="secure-badge">
+                            <i class="fas fa-lock"></i> SSL Secure Payment
                         </div>
                     </div>
 
-                    <hr>
-                    <input id="form-button" class="btn btn-success btn-block" type="submit" value="Continue">
-                </form>
-            </div>
+                    <form id="payment-form">
+                        <!-- Order Summary -->
+                        <div class="order-summary">
+                            <h3>Order Summary</h3>
+                            <div class="summary-details">
+                                <div class="summary-row">
+                                    <span>Subtotal</span>
+                                    <span>${{order.get_cart_total|floatformat:2}}</span>
+                                </div>
+                                <div class="summary-row">
+                                    <span>Shipping</span>
+                                    <span>Free</span>
+                                </div>
+                                <div class="summary-row total">
+                                    <span>Total</span>
+                                    <span>${{order.get_cart_total|floatformat:2}}</span>
+                                </div>
+                            </div>
+                        </div>
 
-            <br>
-            <div class="box-element hidden" id="payment-info">
-                <small>Paypal Options</small>
-                <div id="paypal-button-container"></div>
-            </div>
-        </div>
+                        <!-- Payment Details -->
+                        <div class="payment-details">
+                            <h3>Payment Details</h3>
+                            
+                            <div class="card-icons">
+                                <img src="{% static 'images/visa.svg' %}" alt="Visa">
+                                <img src="{% static 'images/mastercard.svg' %}" alt="Mastercard">
+                                <img src="{% static 'images/amex.svg' %}" alt="American Express">
+                            </div>
 
-        <div class="col-lg-6">
-            <div class="box-element">
-                <a class="btn btn-outline-dark" href="{% url 'cart' %}">&#x2190; Back to Cart</a>
-                <hr>
-                <h3>Order Summary</h3>
-                <hr>
-                {% for item in items %}
-                <div class="cart-row">
-                    <div style="flex:2"><img class="row-image" src="{{item.product.imageURL}}"></div>
-                    <div style="flex:2"><p>{{item.product.name}}</p></div>
-                    <div style="flex:1"><p>${{item.product.price|floatformat:2}}</p></div>
-                    <div style="flex:1"><p>x{{item.quantity}}</p></div>
+                            <div class="form-group">
+                                <label for="card-holder">Card Holder Name</label>
+                                <input type="text" id="card-holder" class="form-control" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="card-element">Card Information</label>
+                                <div id="card-element" class="form-control"></div>
+                                <div id="card-errors" role="alert"></div>
+                            </div>
+
+                            <div class="shipping-info">
+                                <h3>Shipping Information</h3>
+                                
+                                <div class="form-group">
+                                    <label for="address">Address</label>
+                                    <input type="text" class="form-control" id="address" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="city">City</label>
+                                    <input type="text" class="form-control" id="city" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="state">State</label>
+                                    <input type="text" class="form-control" id="state" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="zipcode">Zipcode</label>
+                                    <input type="text" class="form-control" id="zipcode" required>
+                                </div>
+                            </div>
+
+                            <button id="submit-button" class="payment-button" type="submit">
+                                <div id="spinner" class="spinner hidden"></div>
+                                <span id="button-text">Pay ${{order.get_cart_total|floatformat:2}}</span>
+                            </button>
+                        </div>
+                    </form>
                 </div>
-                {% endfor %}
-                <h5>Items: {{order.get_cart_items}}</h5>
-                <h5>Total: ${{order.get_cart_total|floatformat:2}}</h5>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="box-element">
+                    <a class="btn btn-outline-dark" href="{% url 'cart' %}">&#x2190; Back to Cart</a>
+                    <hr>
+                    <h3>Order Summary</h3>
+                    <hr>
+                    {% for item in items %}
+                    <div class="cart-row">
+                        <div style="flex:2"><img class="row-image" src="{{item.product.imageURL}}"></div>
+                        <div style="flex:2"><p>{{item.product.name}}</p></div>
+                        <div style="flex:1"><p>${{item.product.price|floatformat:2}}</p></div>
+                        <div style="flex:1"><p>x{{item.quantity}}</p></div>
+                    </div>
+                    {% endfor %}
+                    <h5>Items: {{order.get_cart_items}}</h5>
+                    <h5>Total: ${{order.get_cart_total|floatformat:2}}</h5>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Add PayPal Script -->
-<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=USD"></script>
-
+<script src="https://js.stripe.com/v3/"></script>
 <script>
-    var total = '{{order.get_cart_total}}'
-    
-    // Shipping form handling
-    var form = document.getElementById('shipping-form')
-    form.addEventListener('submit', function(e){
-        e.preventDefault()
-        if (form.checkValidity()) {
-            document.getElementById('form-button').classList.add('hidden')
-            document.getElementById('payment-info').classList.remove('hidden')
-        } else {
-            form.reportValidity()
-        }
-    })
+    var stripe = Stripe('{{ stripe_public_key }}');
+    var elements = stripe.elements();
 
-    // PayPal button render
-    paypal.Buttons({
-        style: {
-            color: 'blue',
-            shape: 'rect',
+    var style = {
+        base: {
+            color: '#32325d',
+            fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
+            fontSmoothing: 'antialiased',
+            fontSize: '16px',
+            '::placeholder': {
+                color: '#aab7c4'
+            }
         },
-        createOrder: function(data, actions) {
-            // Validate form data before creating order
-            if (!form.checkValidity()) {
-                form.reportValidity();
-                return false;
+        invalid: {
+            color: '#fa755a',
+            iconColor: '#fa755a'
+        }
+    };
+
+    var card = elements.create('card', {style: style});
+    card.mount('#card-element');
+
+    // Handle real-time validation errors
+    card.addEventListener('change', function(event) {
+        var displayError = document.getElementById('card-errors');
+        if (event.error) {
+            displayError.textContent = event.error.message;
+            displayError.classList.add('alert', 'alert-danger');
+        } else {
+            displayError.textContent = '';
+            displayError.classList.remove('alert', 'alert-danger');
+        }
+    });
+
+    // Handle form submission
+    var form = document.getElementById('payment-form');
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Collect shipping information from form fields
+        const shippingInfo = {
+            address: document.getElementById('address').value,
+            city: document.getElementById('city').value,
+            state: document.getElementById('state').value,
+            zipcode: document.getElementById('zipcode').value,
+        };
+        
+        // Debug log
+        console.log('Shipping Info:', shippingInfo);
+        
+        try {
+            // Process the order
+            const orderResponse = await fetch('/process_order/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    'shipping': shippingInfo,
+                    'form': {
+                        'total': '{{order.get_cart_total}}'
+                    }
+                })
+            });
+
+            // Debug log
+            console.log('Order Response:', await orderResponse.clone().text());
+
+            // If order processing succeeds, go to success page
+            if (orderResponse.ok) {
+                window.location.href = '/payment_success/';
+            } else {
+                throw new Error('Order processing failed');
             }
             
-            return actions.order.create({
-                purchase_units: [{
-                    amount: {
-                        value: parseFloat(total).toFixed(2)
-                    }
-                }]
-            });
-        },
-        onApprove: async function(data, actions) {
-            try {
-                const details = await actions.order.capture();
-                console.log('Transaction completed by', details.payer.name.given_name);
-                
-                const formData = {
-                    'name': form.name.value,
-                    'email': form.email.value,
-                    'address': form.address.value,
-                    'city': form.city.value,
-                    'state': form.state.value,
-                    'zipcode': form.zipcode.value,
-                    'total': total,
-                    'transaction_id': details.id
-                };
-
-                const response = await fetch('/process_order/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                    },
-                    body: JSON.stringify({
-                        'form': formData,
-                        'paypal_data': details
-                    })
-                });
-
-                const responseData = await response.json();
-                
-                if (response.ok && responseData.success) {
-                    window.location.href = responseData.redirect_url;
-                } else {
-                    throw new Error(responseData.error || 'Failed to process order');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('There was an error processing your payment. Please try again.');
-            }
-        },
-        onError: function(err) {
-            console.error('PayPal Error:', err);
-            alert('There was an error with PayPal. Please try again.');
-        },
-        onCancel: function(data) {
-            console.log('Payment cancelled');
+        } catch (error) {
+            console.error('Error:', error);
+            window.location.href = `/payment-failed/?error=${encodeURIComponent(error.message)}`;
         }
-    }).render('#paypal-button-container');
-</script>
+    });
 
+    function handleError(error) {
+        console.error('Handling error:', error);  // Debug log
+        const errorElement = document.getElementById('card-errors');
+        errorElement.textContent = error.message;
+        errorElement.classList.add('alert', 'alert-danger');
+        
+        const submitButton = document.getElementById('submit-button');
+        const spinner = document.getElementById('spinner');
+        const buttonText = document.getElementById('button-text');
+        
+        if (submitButton) submitButton.disabled = false;
+        if (spinner) spinner.classList.add('hidden');
+        if (buttonText) buttonText.textContent = 'Try Again';
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Check if order total is 0
+        const orderTotal = parseFloat('{{order.get_cart_total}}');
+        if (orderTotal === 0) {
+            window.location.href = '{% url "cart" %}';
+            return;
+        }
+
+        // Rest of your checkout JavaScript code...
+    });
+</script>
 {% endblock content %}
 
 

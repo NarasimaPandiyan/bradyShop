@@ -11,10 +11,6 @@ https://docs.djangoproject.com/en/3.0/ref/settings/
 """
 
 import os
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,7 +23,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET_KEY = 'z+ksf@)0d^qojbh4rnp4b1to$hq&*tt(3bs$gf(3i267g$k9ln'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.getenv('DEBUG', 'False') == 'True'
+DEBUG = True
 
 ALLOWED_HOSTS = []
 
@@ -133,10 +129,36 @@ MEDIA_URL = '/images/'
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'static/images')
 
-# PayPal Settings
-PAYPAL_CLIENT_ID = os.getenv('PAYPAL_CLIENT_ID')
-PAYPAL_SECRET_KEY = os.getenv('PAYPAL_SECRET_KEY')
+# Stripe Settings
+STRIPE_PUBLIC_KEY = 'pk_test_51QOkUhFN4SOk3REdhNucRRKBWosaPp9vBmKF0CfHG6tKDNTZ9GFyH2tlRw1EIALwMrfclXLHIGolh4QgdBQQHWoK00pc0ARz0l'
+STRIPE_SECRET_KEY = 'sk_test_51QOkUhFN4SOk3REdbMZnTKRdPpimYvPmUGOJEAdpUp3pJllmswgIbpDEqZurCOruDFSBk8PJGtz76iO0PyF5y7jH00Axh9p7GV'
 
-# Add this to ensure environment variables are set
-if not PAYPAL_CLIENT_ID or not PAYPAL_SECRET_KEY:
-    raise Exception("PayPal credentials not set in environment variables")
+# Add this at the end of the file
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'class': 'logging.FileHandler',
+            'filename': 'order_processing.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'store.views': {  # This will capture logs from your views.py
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
