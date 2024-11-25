@@ -54,3 +54,19 @@ python manage.py runserver
 ```
 
 6. Access the application at `http://localhost:8000`
+
+## Environment Setup
+
+1. Copy `.env.example` to `.env`:
+```bash
+cp .env.example .env
+```
+
+2. Update the `.env` file with your PayPal credentials:
+```
+PAYPAL_CLIENT_ID=your_actual_client_id
+PAYPAL_SECRET_KEY=your_actual_secret_key
+DEBUG=True
+```
+
+3. Never commit the `.env` file to version control

@@ -1,0 +1,14 @@
+asgiref @ file:///croot/asgiref_1724072470684/work
+certifi==2024.8.30
+charset-normalizer==3.4.0
+Django @ file:///croot/django_1731615954020/work
+idna==3.10
+pillow @ file:///croot/pillow_1731594689713/work
+python-dotenv==1.0.1
+requests==2.32.3
+setuptools==75.1.0
+sqlparse @ file:///work/perseverance-python-buildout/croot/sqlparse_1698874574933/work
+stripe==11.3.0
+typing_extensions==4.12.2
+urllib3==2.2.3
+wheel==0.44.0
